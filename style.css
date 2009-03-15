@@ -1,0 +1,13 @@
+/*form#openid__login fieldset {
+    width: 400px;
+}*/
+
+#openid__url,
+form#dw__login a:link,
+form#dw__login a:visited,
+form#dw__login a:hover,
+form#dw__login a:active {
+    background: url(login-bg.gif) left center no-repeat;
+    padding-left: 18px;
+}
+

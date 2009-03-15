@@ -1,0 +1,3 @@
+====== OpenID Account ======
+
+Please now verify or complete your account informations to finish registration.
