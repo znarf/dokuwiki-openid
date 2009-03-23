@@ -46,7 +46,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		return array(
 			'author' => 'h6e.net',
 			'email'  => 'contact@h6e.net',
-			'date'   => '2008-03-23',
+			'date'   => '2009-03-23',
 			'name'   => 'OpenID plugin',
 			'desc'   => 'Authenticate on a DokuWiki with OpenID',
 			'url'    => 'http://h6e.net/dokuwiki/plugins/openid',
