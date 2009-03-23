@@ -170,7 +170,12 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				}
 
 				// redirect to OpenID provider for authentication
-				$url = $auth->redirectURL(DOKU_URL, $this->_self('openid'));
+
+				// this fix an issue with mod_rewrite with JainRain library
+				// when a parameter seems to be non existing in the query 
+				$return_to = $this->_self('openid') . '&id=' . $_GET['id'];
+
+				$url = $auth->redirectURL(DOKU_URL, $return_to);
 				$this->_redirect($url);
 
 			} else if (isset($_POST['mode']) && $_POST['mode'] == 'extra') {
