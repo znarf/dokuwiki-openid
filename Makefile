@@ -15,11 +15,12 @@ TAR = tar
 
 BUILD = ./build
 
-NAME = dokuwiki-openid-plugin
+NAME = openid
 VERSION = latest
 STAGE = $(BUILD)/$(NAME)
-ZIP_NAME = $(NAME)-$(VERSION).zip
-TAR_NAME = $(NAME)-$(VERSION).tar.gz
+ARCHIVE_NAME = dokuwiki-openid-plugin
+ZIP_NAME = $(ARCHIVE_NAME)-$(VERSION).zip
+TAR_NAME = $(ARCHIVE_NAME)-$(VERSION).tar.gz
 
 all: export zip tar
 	@echo "Build complete."
