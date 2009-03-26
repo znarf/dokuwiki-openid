@@ -6,7 +6,7 @@
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     This version by François Hodierne (http://h6e.net/)
  * @author     Original by Andreas Gohr <andi@splitbrain.org>
- * @version    2.0 beta 1
+ * @version    2.0 beta 2
  */
 
 /**

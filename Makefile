@@ -1,6 +1,3 @@
-#
-# Exposition PHP Libraries Makefile
-#
 # Targets:
 #  - all: export the files from Git, produce a ZIP and a TAR archive.
 #  - export: export the files from Git.
@@ -49,6 +46,6 @@ tar:
 clean:
 	@echo "Cleaning the build directory..."
 	-@rm -rf $(STAGE)
-	-@rm -f $(BUILD)/$(NAME)*.zip
-	-@rm -f $(BUILD)/$(NAME)*.tar.gz
+	-@rm -f $(BUILD)/$(ZIP_NAME)
+	-@rm -f $(BUILD)/$(TAR_NAME)
 	@echo "Staged files and archives removed."
