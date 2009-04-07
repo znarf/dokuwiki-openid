@@ -6,7 +6,7 @@
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     This version by François Hodierne (http://h6e.net/)
  * @author     Original by Andreas Gohr <andi@splitbrain.org>
- * @version    2.0 beta 2
+ * @version    2.0 beta 3
  */
 
 /**
@@ -46,7 +46,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		return array(
 			'author' => 'h6e.net',
 			'email'  => 'contact@h6e.net',
-			'date'   => '2009-03-23',
+			'date'   => '2009-04-07',
 			'name'   => 'OpenID plugin',
 			'desc'   => 'Authenticate on a DokuWiki with OpenID',
 			'url'    => 'http://h6e.net/dokuwiki/plugins/openid',
@@ -125,7 +125,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function handle_act_preprocess(&$event, $param)
 	{
-		global $conf;
+		global $ID, $conf, $auth;
 
 		$user = $_SERVER['REMOTE_USER'];
         
@@ -139,9 +139,12 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 
 		if ($event->data != 'openid' && $event->data != 'logout') {
 			// Warn the user to register an account if he's using a not registered OpenID
+			// and if registration is possible
 			if (preg_match('!^https?://!', $user)) {
-				$message = sprintf($this->getLang('complete_registration_notice'), $this->_self('openid'));
-				msg($message, 2);
+				if ($auth && $auth->canDo('addUser') && actionOK('register')) {
+					$message = sprintf($this->getLang('complete_registration_notice'), $this->_self('openid'));
+					msg($message, 2);
+				}
 			}
 		}
 
@@ -155,7 +158,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 
 				// we try to login with the OpenID submited
 				$consumer = $this->getConsumer();
-				$auth = $consumer->begin($_POST['openid_url']);
+				$auth = $consumer->begin($_POST['openid_identifier']);
 				if (!$auth) {
 					msg($this->getLang('enter_valid_openid_error'), -1);
 					return;
@@ -172,8 +175,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				// redirect to OpenID provider for authentication
 
 				// this fix an issue with mod_rewrite with JainRain library
-				// when a parameter seems to be non existing in the query 
-				$return_to = $this->_self('openid') . '&id=' . $_GET['id'];
+				// when a parameter seems to be non existing in the query
+				$return_to = $this->_self('openid') . '&id=' . $ID;
 
 				$url = $auth->redirectURL(DOKU_URL, $return_to);
 				$this->_redirect($url);
@@ -207,13 +210,13 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 					} else {
 						$authenticate = $this->login_user($openid);
 						if ($authenticate) {
-							// redirect to restricted application page
-							$this->_redirect(DOKU_URL);
+							// redirect to the page itself (without do=openid)
+							$this->_redirect(wl($ID));
 						}
 					}
 
 				} else {
-					msg($this->getLang('openid_authentication_failed'), -1);
+					msg($this->getLang('openid_authentication_failed') . ': ' . $response->message, -1);
 					return;
 				}
 
@@ -233,6 +236,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function handle_act_unknown(&$event, $param)
 	{
+		global $auth, $ID;
+
 		if ($event->data != 'openid') {
 			return;
 		} 
@@ -249,13 +254,18 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			html_form('register', $form);
 			print '</div>'.NL;
 		} else if (preg_match('!^https?://!', $user)) {
-			print $this->plugin_locale_xhtml('complete');
-			print '<div class="centeralign">'.NL;
-			$form = $this->get_openid_form('extra');
-			html_form('complete', $form);
-			print '</div>'.NL;
+			echo '<h1>', $this->getLang('openid_account_fieldset'), '</h1>', NL;
+			if ($auth && $auth->canDo('addUser') && actionOK('register')) {
+				echo '<p>', $this->getLang('openid_complete_text'), '</p>', NL;
+				print '<div class="centeralign">'.NL;
+				$form = $this->get_openid_form('extra');
+				html_form('complete', $form);
+				print '</div>'.NL;
+			} else {
+				echo '<p>', sprintf($this->getLang('openid_complete_disabled_text'), wl($ID)), '</p>', NL;
+			}
 		} else {
-			echo '<h1>' . $this->getLang('openid_identities_title') . '</h1>';
+			echo '<h1>', $this->getLang('openid_identities_title'), '</h1>', NL;
 			$identities = $this->get_associations($_SERVER['REMOTE_USER']);
 			if (!empty($identities)) {
 				echo '<form action="' . $this->_self('openid') . '" method="post"><div class="no">';
@@ -280,7 +290,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$form->addHidden('mode', 'add');
 			$form->addElement(
 				form_makeTextField(
-					'openid_url', $_POST['openid_url'], $this->getLang('openid_url_label'), 'openid__url', 'block', array('size'=>'50')
+					'openid_identifier', $_POST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', 'block', array('size'=>'50')
 				)
 			);
 			$form->addElement(form_makeButton('submit', '', $this->getLang('add_button')));
@@ -301,9 +311,10 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$p = array('size'=>'50');
 
 		$form = new Doku_Form('openid__login', script());
+		$form->addHidden('id', $_GET['id']);
+		$form->addHidden('do', 'openid');
 		if ($mode == 'extra') {
 			$form->startFieldset($this->getLang('openid_account_fieldset'));
-			$form->addHidden('do', 'openid');
 			$form->addHidden('mode', 'extra');
 			$form->addElement(form_makeTextField('nickname', $_REQUEST['nickname'], $lang['user'], null, $c, $p));
 			$form->addElement(form_makeTextField('email', $_REQUEST['email'], $lang['email'], '', $c, $p));
@@ -311,9 +322,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$form->addElement(form_makeButton('submit', '', $this->getLang('complete_button')));
 		} else {
 			$form->startFieldset($this->getLang('openid_login_fieldset'));
-			$form->addHidden('do', 'openid');
 			$form->addHidden('mode', 'login');
-			$form->addElement(form_makeTextField('openid_url', $_POST['openid_url'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
+			$form->addElement(form_makeTextField('openid_identifier', $_REQUEST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
 			$form->addElement(form_makeButton('submit', '', $lang['btn_login']));
 		}
 		$form->endFieldset();
@@ -343,7 +353,21 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	*/
 	function login_user($openid)
 	{
-		global $USERINFO, $auth;
+		global $USERINFO, $auth, $conf;
+        
+		// look for associations passed from an auth backend in user infos
+		$users = $auth->retrieveUsers();
+		foreach ($users as $id => $user) {
+			if (isset($user['openids'])) {
+				foreach ($user['openids'] as $identity) {
+					if ($identity == $openid) {
+						$USERINFO = $auth->getUserData($id);
+						$this->update_session($id);
+						return true;
+					}
+				}
+			}
+		}
 
 		$associations = $this->get_associations();
 
@@ -386,7 +410,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function register_user()
 	{
-		global $USERINFO, $lang, $conf, $auth, $openid_associations;
+		global $USERINFO, $ID, $lang, $conf, $auth, $openid_associations;
 
 		if(!$auth->canDo('addUser')) return false;
 
@@ -423,7 +447,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$this->update_session($user);
 
 		// account created, everything OK
-		$this->_redirect(DOKU_URL);
+		$this->_redirect(wl($ID));
 	}
 		
 	/**

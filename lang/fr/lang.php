@@ -24,4 +24,7 @@ $lang['openid_identity_added']          = 'Identité OpenID ajoutée avec succè
 $lang['openid_authentication_failed']   = 'Échec de l\'authentification OpenID';
 $lang['openid_authentication_canceled'] = 'Authentification OpenID annulée';
 
+$lang['openid_complete_text'] = 'Veuillez vérifier ou compléter les informations de votre compte pour finir l\'enregistrement.';
+$lang['openid_complete_disabled_text'] = 'Vous êtes correctement authentifiés mais la finalisation de l\'enregistrement n\'est pas possible sur ce wiki. <a href="%s">Continuez ici.</a>';
+
 $lang['none'] = 'Aucune.';
