@@ -467,7 +467,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$INFO = pageinfo();
 
 		return true;
-    }
+	}
 
 	function register_openid_association($user, $openid)
 	{
