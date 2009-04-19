@@ -294,7 +294,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				)
 			);
 			$form->addElement(form_makeButton('submit', '', $this->getLang('add_button')));
-			$form->endFieldset();
 			html_form('add', $form);
 			print '</div>'.NL;
 		}
@@ -361,9 +360,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			if (isset($user['openids'])) {
 				foreach ($user['openids'] as $identity) {
 					if ($identity == $openid) {
-						$USERINFO = $auth->getUserData($id);
-						$this->update_session($id);
-						return true;
+						return $this->update_session($id);
 					}
 				}
 			}
@@ -374,34 +371,26 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		// this openid is associated with a real wiki user account
 		if (isset($associations[$openid])) {
 			$user = $associations[$openid];
-			$USERINFO = $auth->getUserData($user);
-			if (empty($USERINFO)) {
-				msg('Unknown OpenID user', -1);
-				return false;
-			}
-			$this->update_session($user);
-
-		// no real wiki user account associated
-		} else {
-			$USERINFO['pass'] = uniqid();
-			$USERINFO['name'] = 'OpenID';
-			$USERINFO['grps'] = array($conf['defaultgroup'], 'openid');
-			$this->update_session($openid);
-
-			$redirect_url = $this->_self('openid');
-
-			$sregs = array('email', 'nickname', 'fullname');
-			foreach ($sregs as $sreg) {
-				if (!empty($_GET["openid_sreg_$sreg"])) {
-					$redirect_url .= "&$sreg=" . urlencode($_GET["openid_sreg_$sreg"]);
-				}
-			}
-
-			// we will advice the user to register a real user account
-			$this->_redirect($redirect_url);
+			return $this->update_session($user);
 		}
 
-		return true;
+		// no real wiki user account associated
+
+		// note that the generated cookie is invalid and will be invalided
+		// when the 'auth_security_timeout' expire
+		$this->update_session($openid);
+
+		$redirect_url = $this->_self('openid');
+
+		$sregs = array('email', 'nickname', 'fullname');
+		foreach ($sregs as $sreg) {
+			if (!empty($_GET["openid_sreg_$sreg"])) {
+				$redirect_url .= "&$sreg=" . urlencode($_GET["openid_sreg_$sreg"]);
+			}
+		}
+
+		// we will advice the user to register a real user account
+		$this->_redirect($redirect_url);
 	}
 
 	/**
@@ -460,28 +449,25 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function update_session($user)
 	{
-		global $USERINFO, $INFO;
-		
+		global $USERINFO, $INFO, $conf, $auth;
+
 		$_SERVER['REMOTE_USER'] = $user;
 
-		// set cookie
-		$sticky = true;
-		$cookie = base64_encode("$user|$sticky|openid");
-		if($sticky) $time = time()+60*60*24*365; //one year
-		setcookie(DOKU_COOKIE, $cookie, $time, DOKU_REL);
+		$USERINFO = $auth->getUserData($user);
+		if (empty($USERINFO)) {
+			$USERINFO['pass'] = 'invalid';
+			$USERINFO['name'] = 'OpenID';
+			$USERINFO['grps'] = array($conf['defaultgroup'], 'openid');
+		}
 
-		// set session after reopening it
-		session_start();
-		$_SESSION[DOKU_COOKIE]['auth']['user'] = $user;
-		$_SESSION[DOKU_COOKIE]['auth']['pass'] = 'openid';
-		$_SESSION[DOKU_COOKIE]['auth']['buid'] = auth_browseruid();
-		$_SESSION[DOKU_COOKIE]['auth']['info'] = $USERINFO;
-		$_SESSION[DOKU_COOKIE]['auth']['time'] = time();
-		session_write_close();
+		$pass = PMA_blowfish_encrypt($USERINFO['pass'], auth_cookiesalt());
+		auth_setCookie($user, $pass, false);
 
 		// auth data has changed, reinit the $INFO array
 		$INFO = pageinfo();
-	}
+
+		return true;
+    }
 
 	function register_openid_association($user, $openid)
 	{
