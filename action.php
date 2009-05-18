@@ -34,6 +34,8 @@ if(!defined('DOKU_INC')) die();
 
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 
+require_once(dirname(__FILE__).'/compat.php');
+
 require_once(DOKU_PLUGIN.'action.php');
 
 class action_plugin_openid extends DokuWiki_Action_Plugin {
@@ -46,7 +48,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		return array(
 			'author' => 'h6e.net',
 			'email'  => 'contact@h6e.net',
-			'date'   => '2009-04-07',
+			'date'   => '2009-05-18',
 			'name'   => 'OpenID plugin',
 			'desc'   => 'Authenticate on a DokuWiki with OpenID',
 			'url'    => 'http://h6e.net/dokuwiki/plugins/openid',
@@ -353,7 +355,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	function login_user($openid)
 	{
 		global $USERINFO, $auth, $conf;
-        
+
 		// look for associations passed from an auth backend in user infos
 		$users = $auth->retrieveUsers();
 		foreach ($users as $id => $user) {
@@ -399,7 +401,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function register_user()
 	{
-		global $USERINFO, $ID, $lang, $conf, $auth, $openid_associations;
+		global $ID, $lang, $conf, $auth, $openid_associations;
 
 		if(!$auth->canDo('addUser')) return false;
 
@@ -432,7 +434,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		// we update the OpenID associations array
 		$this->register_openid_association($user, $openid);
 
-		$USERINFO = $auth->getUserData($user);
 		$this->update_session($user);
 
 		// account created, everything OK
@@ -449,6 +450,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function update_session($user)
 	{
+		session_start();
+
 		global $USERINFO, $INFO, $conf, $auth;
 
 		$_SERVER['REMOTE_USER'] = $user;
