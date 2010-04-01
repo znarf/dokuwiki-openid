@@ -292,7 +292,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$form->addHidden('mode', 'add');
 			$form->addElement(
 				form_makeTextField(
-					'openid_identifier', $_POST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', 'block', array('size'=>'50')
+					'openid_identifier', isset($_POST['openid_identifier']) ? $_POST['openid_identifier'] : '',
+					$this->getLang('openid_url_label'), 'openid__url', 'block', array('size'=>'50')
 				)
 			);
 			$form->addElement(form_makeButton('submit', '', $this->getLang('add_button')));
@@ -511,6 +512,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$openid_associations = $this->openid_associations;
 		} else if (file_exists(DOKU_CONF.'openid.php')) {
 			// load OpenID associations array
+			$openid_associations = array();
 			include(DOKU_CONF.'openid.php');
 			$this->openid_associations = $openid_associations;
 		} else {
@@ -519,7 +521,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		// Maybe is there a better way to filter the array
 		if (!empty($username)) {
 			$user_openid_associations = array();
-			foreach ($openid_associations as $openid => $login) {
+			foreach ((array)$openid_associations as $openid => $login) {
 				if ($username == $login) {
 					$user_openid_associations[$openid] = $login;
 				}
