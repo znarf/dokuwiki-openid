@@ -1,0 +1,128 @@
+Index: Auth/Yadis/Yadis.php
+===================================================================
+--- Auth/Yadis/Yadis.php	(revision 17369)
++++ Auth/Yadis/Yadis.php	(working copy)
+@@ -141,7 +141,7 @@
+     }
+ 
+     $yadis_result = call_user_func_array($discover_func,
+-                                         array($input_url, $fetcher));
++                                         array($input_url, &$fetcher));
+ 
+     if ($yadis_result === null) {
+         return array($input_url, array());
+Index: Auth/Yadis/Manager.php
+===================================================================
+--- Auth/Yadis/Manager.php	(revision 17369)
++++ Auth/Yadis/Manager.php	(working copy)
+@@ -413,7 +413,7 @@
+ 
+             list($yadis_url, $services) = call_user_func($discover_cb,
+                                                          $this->url,
+-                                                         $fetcher);
++                                                         &$fetcher);
+ 
+             $manager = $this->createManager($services, $yadis_url);
+         }
+Index: Auth/Yadis/XRDS.php
+===================================================================
+--- Auth/Yadis/XRDS.php	(revision 17369)
++++ Auth/Yadis/XRDS.php	(working copy)
+@@ -428,7 +428,8 @@
+                 $matches = 0;
+ 
+                 foreach ($filters as $filter) {
+-                    if (call_user_func_array($filter, array($service))) {
++
++                    if (call_user_func_array($filter, array(&$service))) {
+                         $matches++;
+ 
+                         if ($filter_mode == SERVICES_YADIS_MATCH_ANY) {
+Index: Auth/OpenID/Consumer.php
+===================================================================
+--- Auth/OpenID/Consumer.php	(revision 17369)
++++ Auth/OpenID/Consumer.php	(working copy)
+@@ -666,7 +666,7 @@
+                                         '_completeInvalid');
+ 
+         return call_user_func_array(array(&$this, $method),
+-                                    array($message, $endpoint, $return_to));
++									array($message, &$endpoint, $return_to));
+     }
+ 
+     /**
+@@ -1181,7 +1181,7 @@
+         // oidutil.log('Performing discovery on %s' % (claimed_id,))
+         list($unused, $services) = call_user_func($this->discoverMethod,
+                                                   $claimed_id,
+-                                                  $this->fetcher);
++												&$this->fetcher);
+ 
+         if (!$services) {
+             return new Auth_OpenID_FailureResponse(null,
+Index: Auth/OpenID/Server.php
+===================================================================
+--- Auth/OpenID/Server.php	(revision 17369)
++++ Auth/OpenID/Server.php	(working copy)
+@@ -1699,7 +1699,7 @@
+     {
+         if (method_exists($this, "openid_" . $request->mode)) {
+             $handler = array($this, "openid_" . $request->mode);
+-            return call_user_func($handler, $request);
++            return call_user_func($handler, &$request);
+         }
+         return null;
+     }
+Index: Auth/OpenID/HMAC.php
+===================================================================
+--- Auth/OpenID/HMAC.php	(revision 17369)
++++ Auth/OpenID/HMAC.php	(working copy)
+@@ -60,6 +60,11 @@
+         $key = Auth_OpenID_SHA1($key, true);
+     }
+ 
++	if (function_exists('hash_hmac') && function_exists('hash_algos') && in_array('sha1', hash_algos())) {
++		return hash_hmac('sha1', $text, $key, true);
++	}
++
++	// Home-made solution
+     $key = str_pad($key, Auth_OpenID_SHA1_BLOCKSIZE, chr(0x00));
+     $ipad = str_repeat(chr(0x36), Auth_OpenID_SHA1_BLOCKSIZE);
+     $opad = str_repeat(chr(0x5c), Auth_OpenID_SHA1_BLOCKSIZE);
+Index: Auth/OpenID/BigMath.php
+===================================================================
+--- Auth/OpenID/BigMath.php	(revision 17369)
++++ Auth/OpenID/BigMath.php	(working copy)
+@@ -366,6 +366,7 @@
+ {
+     $loaded = false;
+ 
++	$hasDl = function_exists('dl');
+     foreach ($exts as $extension) {
+         // See if the extension specified is already loaded.
+         if ($extension['extension'] &&
+@@ -374,9 +375,9 @@
+         }
+ 
+         // Try to load dynamic modules.
+-        if (!$loaded) {
++        if (!$loaded && $hasDl) {
+             foreach ($extension['modules'] as $module) {
+-                if (@dl($module . "." . PHP_SHLIB_SUFFIX)) {
++                if (@dl($module . '.' . PHP_SHLIB_SUFFIX)) {
+                     $loaded = true;
+                     break;
+                 }
+Index: Auth/OpenID/TrustRoot.php
+===================================================================
+--- Auth/OpenID/TrustRoot.php	(revision 17369)
++++ Auth/OpenID/TrustRoot.php	(working copy)
+@@ -413,7 +413,7 @@
+     }
+ 
+     call_user_func_array($discover_function,
+-                         array($relying_party_url, $fetcher));
++                         array($relying_party_url, &$fetcher));
+ 
+     $return_to_urls = array();
+     $matching_endpoints = Auth_OpenID_extractReturnURL($endpoints);
