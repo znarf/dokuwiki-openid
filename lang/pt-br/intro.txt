@@ -1,0 +1,4 @@
+====== OpenID Login ======
+
+Você pode usar sua [[http://openid.net/|OpenID]] para entrar neste site.
+Entre com o identificador de sua OpenID (URL) no campo de login.
