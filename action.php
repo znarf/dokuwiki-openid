@@ -6,7 +6,7 @@
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     This version by François Hodierne (http://h6e.net/)
  * @author     Original by Andreas Gohr <andi@splitbrain.org>
- * @version    2.1.0
+ * @version    2.2.0
  */
 
 /**
@@ -46,7 +46,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		return array(
 			'author' => 'h6e.net',
 			'email'  => 'contact@h6e.net',
-			'date'   => '2010-04-01',
+			'date'   => '2011-02-15',
 			'name'   => 'OpenID plugin',
 			'desc'   => 'Authenticate on a DokuWiki with OpenID',
 			'url'    => 'http://h6e.net/dokuwiki/plugins/openid',
