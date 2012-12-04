@@ -156,11 +156,41 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 
 			if (isset($_POST['mode']) && ($_POST['mode'] == 'login' || $_POST['mode'] == 'add')) {
 
+        // See if submitted provider is allowed or not
+        $conf_allowedproviders = $this->getConf('allowedproviders');
+        
+        if( empty($conf_allowedproviders) ) {
+          // Allow any provider
+          $openid_identifier = $_POST['openid_identifier'];
+        } else {
+          // Get it from the selected option
+          $openid_provider = $_POST['openid_provider'];
+
+          // See if it is valid
+          $allowedproviders = explode(' ', $conf_allowedproviders);
+          if( !in_array($openid_provider, $allowedproviders) ) {
+            msg($this->getLang('enter_valid_openid_error'), -1);
+					  return;
+          }
+          // Prepend http://
+          if( substr($openid_provider, 0, strlen('http://')) !== 'http://' ) {
+            $openid_provider = "http://{$openid_provider}";
+          }
+          // Append /
+          $openid_provider = rtrim($openid_provider, '/').'/';
+          
+          // Create identifier for user. Replace '*' by username.
+          $openid_identifier = $openid_provider;
+          $openid_identifier = str_replace('*', $_POST['nickname'], $openid_identifier);
+          //$openid_identifier = str_replace('*', '', $openid_provider);
+          //die($openid_identifier);
+        }
+
 				// we try to login with the OpenID submited
 				$consumer = $this->getConsumer();
-				$auth = $consumer->begin($_POST['openid_identifier']);
+				$auth = $consumer->begin($openid_identifier);
 				if (!$auth) {
-					msg($this->getLang('enter_valid_openid_error'), -1);
+					msg($this->getLang('enter_valid_openid_error') . ':'.$openid_identifier, -1);
 					return;
 				}
 
@@ -305,10 +335,23 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */    
 	function get_openid_form($mode)
 	{
-		global $USERINFO, $lang;
-
+		global $USERINFO, $lang, $conf;
+    
 		$c = 'block';
 		$p = array('size'=>'50');
+
+
+    $conf_allowedproviders = $this->getConf('allowedproviders');
+    if( empty($conf_allowedproviders) ) {
+      $providers = null;
+    } else {
+      $providers = array();
+      foreach( explode(' ', $conf_allowedproviders) as $provider) {
+        $provider_label = str_replace(array('https://', '*'), '', $provider);
+        $provider_label = trim($provider_label, '/');
+        $providers[$provider] = $provider_label;
+      }
+    }
 
 		$form = new Doku_Form('openid__login', script());
 		$form->addHidden('id', $_GET['id']);
@@ -323,7 +366,24 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		} else {
 			$form->startFieldset($this->getLang('openid_login_fieldset'));
 			$form->addHidden('mode', 'login');
-			$form->addElement(form_makeTextField('openid_identifier', $_REQUEST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
+
+      if ( !is_array($providers) ) {
+			  $form->addElement(form_makeTextField('openid_identifier', $_REQUEST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
+      } else {
+        $params = array();
+        $form->addElement(
+          form_makeListboxField(
+            'openid_provider',
+            $providers,
+            $_REQUEST['openid_provider'], #default
+            $this->getLang('openid_provider_label'),
+            '',
+            'block',
+            $params
+          )
+        );
+        $form->addElement(form_makeTextField('nickname', $_REQUEST['nickname'], $lang['user'], null, $c, $p));
+      }
 			$form->addElement(form_makeButton('submit', '', $lang['btn_login']));
 		}
 		$form->endFieldset();

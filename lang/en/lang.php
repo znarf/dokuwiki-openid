@@ -4,6 +4,7 @@ $lang['openid_login_fieldset']    = 'OpenID Login';
 $lang['openid_account_fieldset']  = 'OpenID Account';
 
 $lang['openid_url_label'] = 'OpenID URL';
+$lang['openid_provider_label'] = 'OpenID Provider';
 
 $lang['add_button']             = 'Add';
 $lang['complete_button']        = 'Complete';
@@ -26,5 +27,4 @@ $lang['openid_authentication_canceled'] = 'OpenID authentication canceled.';
 
 $lang['openid_complete_text'] = 'Please now verify or complete your account informations to finish registration.';
 $lang['openid_complete_disabled_text'] = 'You\'re correctly authenticated but registration is not possible on this wiki. <a href="%s">Continue there.</a>';
-
 $lang['none'] = 'None.';
