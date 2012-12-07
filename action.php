@@ -171,11 +171,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
             msg($this->getLang('enter_valid_openid_error'), -1);
 					  return;
           }
-
-          // Prepend http://
-          if( substr($openid_provider, 0, strlen('http://')) !== 'http://' ) {
-            $openid_provider = "http://{$openid_provider}";
-          }
           
           // Create identifier for user. Replace '*' by username.
           $openid_identifier = $openid_provider;
