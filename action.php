@@ -640,21 +640,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
 			$INFO['writable'] = (is_writable($INFO['filepath']) && $INFO['perm'] >= AUTH_EDIT);
 		}
-		#$INFO['userinfo']['name'] = str_replace(array('https://','http://', $providers[0]),'', $INFO['userinfo']['name']);
 		
 		$INFO['client'] = $_SESSION[DOKU_COOKIE]['openid_fullname'];
-		print '<pre>';
-		print_r($INFO['userinfo']);
-		print '</pre>';
-	}
-
-	function provider_group($openid_provider)
-	{
-		$group = $openid_provider;
-		$group = str_replace("*", $group);
-		$group = str_replace(array('https://', 'http://'), '', $group);
-		$group = trimr($group, '/');
-		return $group;
 	}
 
 	function check_provider($openid_provider)
