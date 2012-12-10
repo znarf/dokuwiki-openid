@@ -399,12 +399,20 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function handle_login_form(&$event, $param)
 	{
-		$msg = $this->getLang('login_link');
-		$msg = sprintf("<p>$msg</p>", $this->_self('openid'));
-		$pos = $event->data->findElementByAttribute('type', 'submit');
-		$event->data->insertElement($pos+2, $msg);
+		if ($this->getConf('loginopenid') && empty($_GET['disableopenid'])) {
+			$event->data = $this->get_openid_form('login');
+			$pos = $event->data->findElementByAttribute('type', 'submit');
+			$msg = $this->getLang('login_link_normal');
+			$msg = sprintf("<p>$msg</p>", wl($ID, 'do=login&disableopenid=1'));
+			$event->data->insertElement($pos+2, $msg);
+		} else {
+			$msg = $this->getLang('login_link');
+			$msg = sprintf("<p>$msg</p>", $this->_self('openid'));
+			$pos = $event->data->findElementByAttribute('type', 'submit');
+			$event->data->insertElement($pos+2, $msg);
+		}
 	}
-
+	
 	function handle_profile_form(&$event, $param)
 	{
 		echo '<p>', sprintf($this->getLang('manage_link'), $this->_self('openid')), '</p>';
@@ -609,16 +617,13 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			return array();
 		}
 		// See if logged in through openid
-		if (preg_match('|^https?://|', $user)) {
-			if( $this->check_identifier($user) ) {
-				return array(parse_url($user, PHP_URL_HOST));
-			}
-			
+		if ( $this->check_identifier($user) ) {
+			return array(parse_url($user, PHP_URL_HOST));
 		}
 		$associations = $this->get_associations($user);
 		$providers=array();
 		foreach ($associations as $openid_identifier => $username) {
-			$providers[] = $this->check_identifier($openid_identifier);
+			$providers[] = parse_url($openid_identifier, PHP_URL_HOST);
 		}
 		return $providers;
 	}
@@ -656,18 +661,18 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	function check_identifier($openid_identifier)
 	{
 			// Check if identity matches allowed provider.
-			// Identity: http://openid.example.com/johndoe/
+			// Identifier: http://openid.example.com/johndoe/
 			// Provider: http://openid.example.com/*/
 			$conf_allowedproviders = $this->getConf('allowedproviders');
 			if (empty($conf_allowedproviders) ) {
-				return parse_urL($openid_identifier, PHP_URL_HOST);
+				return true;
 			}
 
 			$allowedproviders = explode(' ', $conf_allowedproviders);
 			$isallowed = false;
 			foreach ($allowedproviders as $allowedprovider) {
 				if( fnmatch( $allowedprovider, $openid_identifier ) ) {
-					return parse_url($allowedprovider, PHP_URL_HOST);
+					return true;
 				}
 			}
 			return false;

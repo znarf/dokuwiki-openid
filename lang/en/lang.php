@@ -10,8 +10,9 @@ $lang['add_button']             = 'Add';
 $lang['complete_button']        = 'Complete';
 $lang['delete_selected_button'] = 'Delete selected';
 
-$lang['login_link']   = 'You may <a href="%s" class="openid">login with OpenID</a>, too.';
-$lang['manage_link']  = 'You can also <a href="%s">manage your OpenID identities</a>';
+$lang['login_link']         = 'You may <a href="%s" class="openid">login with OpenID</a>, too.';
+$lang['login_link_normal']  = 'Login <a href="%s">without OpenID</a>.';
+$lang['manage_link']        = 'You can also <a href="%s">manage your OpenID identities</a>';
 
 $lang['add_openid_title']         = 'Add an OpenID';
 $lang['openid_identities_title']  = 'Your OpenID identities';
