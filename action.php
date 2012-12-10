@@ -78,6 +78,10 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$this,
 			'handle_act_unknown',
 			array());
+    $controller->register_hook('ACTION_ACT_PREPROCESS',
+      'AFTER',
+      $this,
+      'assigngroup');
 	}
 
 	/**
@@ -158,23 +162,25 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			if (isset($_POST['mode']) && ($_POST['mode'] == 'login' || $_POST['mode'] == 'add')) {
 
         // See if submitted provider is allowed or not
-        if( empty($conf_allowedproviders) ) {
+        if (empty($conf_allowedproviders)) {
           // Allow any provider
+          // User needs to fill in full identifier URL.
           $openid_identifier = $_POST['openid_identifier'];
         } else {
           // Get it from the selected option
           $openid_provider = $_POST['openid_provider'];
 
-          // See if it is valid
-          $allowedproviders = explode(' ', $conf_allowedproviders);
-          if( !in_array($openid_provider, $allowedproviders) ) {
-            msg($this->getLang('enter_valid_openid_error'), -1);
-					  return;
-          }
-          
           // Create identifier for user. Replace '*' by username.
           $openid_identifier = $openid_provider;
           $openid_identifier = str_replace('*', $_POST['nickname'], $openid_identifier);
+          
+          $validprovider   = $this->check_provider($openid_provider);
+          $valididentifier = $this->check_identifier($openid_identifier);
+
+          if( !$validprovider or !$valididentifier ) {
+            msg($this->getLang('enter_valid_openid_error'), -1);
+					  return;
+          }
         }
 
 				// we try to login with the OpenID submited
@@ -218,18 +224,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				if ($response->status == Auth_OpenID_SUCCESS) {
           $openid_identifier = $_GET['openid_identity'];
           
-          // Check if identity matches allowed provider.
-          // Identity: http://openid.example.com/johndoe/
-          // Provider: http://openid.example.com/*/
-          $allowedproviders = explode(' ', $conf_allowedproviders);
-          $isallowed = false;
-          foreach ($allowedproviders as $allowedprovider) {
-            if( fnmatch( $allowedprovider, $openid_identifier ) ) {
-              $isallowed = true;
-              break;
-            }
-          }
-          
+          $isallowed = $this->check_identifier($openid_identifier);
+
           if (!$isallowed) {
             msg($this->getlang('enter_valid_openid_error'), -1);
             return;
@@ -356,8 +352,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
     } else {
       $providers = array();
       foreach( explode(' ', $conf_allowedproviders) as $provider) {
-        $provider_label = str_replace(array('https://', 'http://', '*'), '', $provider);
-        $provider_label = trim($provider_label, '/');
+        $provider_label = parse_url($provider, PHP_URL_HOST);
         $providers[$provider] = $provider_label;
       }
     }
@@ -597,5 +592,93 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		}
 		return $openid_associations;
 	}
+	
+  function allowedproviders() {
+    $conf_allowedproviders = $this->getConf('allowedproviders');
+    if (empty($conf_allowedproviders) ) {
+      return array();
+    } else {
+      return explode(' ', $conf_allowedproviders);
+    }
+  }
 
+  function user_getproviders($user) {
+    if (empty($user)) {
+      return array();
+    }
+    // See if logged in through openid
+    if (preg_match('|^https?://|', $user)) {
+      if( $this->check_identifier($user) ) {
+        return array(parse_url($user, PHP_URL_HOST));
+      }
+      
+    }
+    $associations = $this->get_associations($user);
+    $providers=array();
+    foreach ($associations as $openid_identifier => $username) {
+      $providers[] = $this->check_identifier($openid_identifier);
+    }
+    return $providers;
+  }
+
+  /**
+   * Inspired by: http://subversion.fem.tu-ilmenau.de/websvn/wsvn/dokuwiki/ipgroup/action.php
+   */ 
+  function assigngroup(&$event, $param) {
+    global $USERINFO, $INFO, $ID;
+    $user = $_SERVER['REMOTE_USER'];
+    $providers = $this->user_getproviders($user);
+    
+    foreach ($providers as $provider) {
+      if (!empty($USERINFO)) {
+        $USERINFO['grps'][] = $provider;
+      }
+      $INFO['userinfo']['grps'][] = $provider;
+      $INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
+      $INFO['writable'] = (is_writable($INFO['filepath']) && $INFO['perm'] >= AUTH_EDIT);
+    }
+    #$INFO['userinfo']['name'] = str_replace(array('https://','http://', $providers[0]),'', $INFO['userinfo']['name']);
+    
+    $INFO['client'] = $_SESSION[DOKU_COOKIE]['openid_fullname'];
+    print '<pre>';
+    print_r($INFO['userinfo']);
+    print '</pre>';
+  }
+
+  function provider_group($openid_provider) {
+    $group = $openid_provider;
+    $group = str_replace("*", $group);
+    $group = str_replace(array('https://', 'http://'), '', $group);
+    $group = trimr($group, '/');
+    return $group;
+  }
+
+  function check_provider($openid_provider) {
+      $conf_allowedproviders = $this->getConf('allowedproviders');
+      if (empty($conf_allowedproviders) ) {
+        return true;
+      }
+      $allowedproviders = explode(' ', $conf_allowedproviders);
+      $valid = in_array($openid_provider, $allowedproviders);
+      return $valid;
+  }
+  
+  function check_identifier($openid_identifier) {
+      // Check if identity matches allowed provider.
+      // Identity: http://openid.example.com/johndoe/
+      // Provider: http://openid.example.com/*/
+      $conf_allowedproviders = $this->getConf('allowedproviders');
+      if (empty($conf_allowedproviders) ) {
+        return parse_urL($openid_identifier, PHP_URL_HOST);
+      }
+
+      $allowedproviders = explode(' ', $conf_allowedproviders);
+      $isallowed = false;
+      foreach ($allowedproviders as $allowedprovider) {
+        if( fnmatch( $allowedprovider, $openid_identifier ) ) {
+          return parse_url($allowedprovider, PHP_URL_HOST);
+        }
+      }
+      return false;
+  }
 }
