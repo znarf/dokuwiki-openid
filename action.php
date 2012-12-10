@@ -583,7 +583,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			include(DOKU_CONF.'openid.php');
 			$this->openid_associations = $openid_associations;
 		} else {
-			$this->openid_associations = $openid_associations = $openid_associations = array();
+			$this->openid_associations = $openid_associations = array();
 		}
 		// Maybe is there a better way to filter the array
 		if (!empty($username)) {
