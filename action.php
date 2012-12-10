@@ -593,7 +593,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		return $openid_associations;
 	}
 	
-	function allowedproviders() {
+	function allowedproviders()
+	{
 		$conf_allowedproviders = $this->getConf('allowedproviders');
 		if (empty($conf_allowedproviders) ) {
 			return array();
@@ -602,7 +603,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		}
 	}
 
-	function user_getproviders($user) {
+	function user_getproviders($user)
+	{
 		if (empty($user)) {
 			return array();
 		}
@@ -624,7 +626,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	/**
 	 * Inspired by: http://subversion.fem.tu-ilmenau.de/websvn/wsvn/dokuwiki/ipgroup/action.php
 	 */ 
-	function assigngroup(&$event, $param) {
+	function assigngroup(&$event, $param)
+	{
 		global $USERINFO, $INFO, $ID;
 		$user = $_SERVER['REMOTE_USER'];
 		$providers = $this->user_getproviders($user);
@@ -645,7 +648,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		print '</pre>';
 	}
 
-	function provider_group($openid_provider) {
+	function provider_group($openid_provider)
+	{
 		$group = $openid_provider;
 		$group = str_replace("*", $group);
 		$group = str_replace(array('https://', 'http://'), '', $group);
@@ -653,7 +657,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		return $group;
 	}
 
-	function check_provider($openid_provider) {
+	function check_provider($openid_provider)
+	{
 			$conf_allowedproviders = $this->getConf('allowedproviders');
 			if (empty($conf_allowedproviders) ) {
 				return true;
@@ -663,7 +668,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			return $valid;
 	}
 	
-	function check_identifier($openid_identifier) {
+	function check_identifier($openid_identifier)
+	{
 			// Check if identity matches allowed provider.
 			// Identity: http://openid.example.com/johndoe/
 			// Provider: http://openid.example.com/*/
