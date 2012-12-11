@@ -636,10 +636,11 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		global $USERINFO, $INFO, $ID;
 		$user = $_SERVER['REMOTE_USER'];
 		$providers = $this->user_getproviders($user);
-		
 		foreach ($providers as $provider) {
 			if (!empty($USERINFO)) {
 				$USERINFO['grps'][] = $provider;
+			} else {
+				$INFO['userinfo']['name'] = parse_url($INFO['userinfo']['name'], PHP_URL_HOST);
 			}
 			$INFO['userinfo']['grps'][] = $provider;
 			$INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
@@ -665,6 +666,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	
 	function check_identifier($openid_identifier)
 	{
-			return $this->check_provider($openid_provider);
+			return $this->check_provider($openid_identifier);
 	}
 }
