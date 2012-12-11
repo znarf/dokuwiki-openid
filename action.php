@@ -654,8 +654,13 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				return true;
 			}
 			$allowedproviders = explode(' ', $conf_allowedproviders);
-			$valid = in_array($openid_provider, $allowedproviders);
-			return $valid;
+			$host = parse_url($openid_provider, PHP_URL_HOST);
+			foreach ($allowedproviders as $provider) {
+				if (parse_url($provider, PHP_URL_HOST) == $host) {
+					return true;
+				}
+			}
+			return false;
 	}
 	
 	function check_identifier($openid_identifier)
@@ -667,11 +672,11 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			if (empty($conf_allowedproviders) ) {
 				return true;
 			}
-
 			$allowedproviders = explode(' ', $conf_allowedproviders);
 			$isallowed = false;
+			$host = parse_url($openid_identifier, PHP_URL_HOST);
 			foreach ($allowedproviders as $allowedprovider) {
-				if( fnmatch( $allowedprovider, $openid_identifier ) ) {
+				if (parse_url($allowedprovider, PHP_URL_HOST) == $host) {
 					return true;
 				}
 			}
