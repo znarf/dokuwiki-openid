@@ -665,6 +665,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	
 	function check_identifier($openid_identifier)
 	{
-			return check_provider($openid_provider);
+			return $this->check_provider($openid_provider);
 	}
 }
