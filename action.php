@@ -665,21 +665,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	
 	function check_identifier($openid_identifier)
 	{
-			// Check if identity matches allowed provider.
-			// Identifier: http://openid.example.com/johndoe/
-			// Provider: http://openid.example.com/*/
-			$conf_allowedproviders = $this->getConf('allowedproviders');
-			if (empty($conf_allowedproviders) ) {
-				return true;
-			}
-			$allowedproviders = explode(' ', $conf_allowedproviders);
-			$isallowed = false;
-			$host = parse_url($openid_identifier, PHP_URL_HOST);
-			foreach ($allowedproviders as $allowedprovider) {
-				if (parse_url($allowedprovider, PHP_URL_HOST) == $host) {
-					return true;
-				}
-			}
-			return false;
+			return check_provider($openid_provider);
 	}
 }
