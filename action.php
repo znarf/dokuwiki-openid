@@ -639,12 +639,17 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		foreach ($providers as $provider) {
 			if (!empty($USERINFO)) {
 				$USERINFO['grps'][] = $provider;
-			} else {
-				$INFO['userinfo']['name'] = parse_url($INFO['userinfo']['name'], PHP_URL_HOST);
 			}
 			$INFO['userinfo']['grps'][] = $provider;
 			$INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
-			$INFO['writable'] = (is_writable($INFO['filepath']) && $INFO['perm'] >= AUTH_EDIT);
+			$INFO['writable'] = false;
+			if ($INFO['perm'] >= AUTH_EDIT) {
+				if (file_exists($INFO['filepath'])) {
+					$INFO['writable'] = is_writable($INFO['filepath']);
+				} else {
+					$INFO['writable'] = is_writable(dirname($INFO['filepath']));
+				}
+			}
 		}
 	}
 
