@@ -58,6 +58,10 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function register(&$controller)
 	{
+		$controller->register_hook('ACTION_ACT_PREPROCESS',
+		'BEFORE',
+		$this,
+		'handle_userinfo');
 		$controller->register_hook('HTML_LOGINFORM_OUTPUT',
 			'BEFORE',
 			$this,
@@ -81,7 +85,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$controller->register_hook('ACTION_ACT_PREPROCESS',
 			'BEFORE',
 			$this,
-			'assigngroup');
+			'handle_acl');
+
 	}
 
 	/**
@@ -145,7 +150,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			// Warn the user to register an account if he's using a not registered OpenID
 			// and if registration is possible
 			if (preg_match('!^https?://!', $user)) {
-				if ($auth && $auth->canDo('addUser') && actionOK('register')) {
+				$registerOK = ( actionOK('register') || $this->getConf('register_allow') );
+				if ($auth && $auth->canDo('addUser') && $registerOK) {
 					$message = sprintf($this->getLang('complete_registration_notice'), $this->_self('openid'));
 					msg($message, 2);
 				}
@@ -204,10 +210,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				// this fix an issue with mod_rewrite with JainRain library
 				// when a parameter seems to be non existing in the query
 				$return_to = $this->_self('openid') . '&id=' . $ID;
-
+				
 				$url = $auth->redirectURL(DOKU_URL, $return_to);
 				$this->_redirect($url);
-
 			} else if (isset($_POST['mode']) && $_POST['mode'] == 'extra') {
 				// we register the user on the wiki and associate the account with his OpenID
 				$this->register_user();
@@ -249,7 +254,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 							$this->_redirect(wl($ID));
 						}
 					}
-
 				} else {
 					msg($this->getLang('openid_authentication_failed'), -1);
 					return;
@@ -260,7 +264,6 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				msg($this->getLang('openid_authentication_canceled'), 0);
 				return; // fall through to what ever action was called
 			}
-
 		}
 		
 		return; // fall through to what ever action was called
@@ -271,7 +274,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function handle_act_unknown(&$event, $param)
 	{
-		global $auth, $ID;
+		global $auth, $ID, $conf;
 
 		if ($event->data != 'openid') {
 			return;
@@ -290,7 +293,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			print '</div>'.NL;
 		} else if (preg_match('!^https?://!', $user)) {
 			echo '<h1>', $this->getLang('openid_account_fieldset'), '</h1>', NL;
-			if ($auth && $auth->canDo('addUser') && actionOK('register')) {
+			$registerOK = ( actionOK('register') || $this->getConf('register_allow') );
+			if ($auth && $auth->canDo('addUser') && $registerOK) {
 				echo '<p>', $this->getLang('openid_complete_text'), '</p>', NL;
 				print '<div class="centeralign">'.NL;
 				$form = $this->get_openid_form('extra');
@@ -361,11 +365,18 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$form->addHidden('id', $_GET['id']);
 		$form->addHidden('do', 'openid');
 		if ($mode == 'extra') {
+		
+			$lockusername = $this->getConf('register_lock_username');
+			$pnickname = $p;
+			if( $lockusername ) {
+				$pnickname['disabled'] = 'disabled';
+			}
+			$openid_data = $_SESSION[DOKU_COOKIE]["auth"]["info"]["openid"];
 			$form->startFieldset($this->getLang('openid_account_fieldset'));
 			$form->addHidden('mode', 'extra');
-			$form->addElement(form_makeTextField('nickname', $_REQUEST['nickname'], $lang['user'], null, $c, $p));
-			$form->addElement(form_makeTextField('email', $_REQUEST['email'], $lang['email'], '', $c, $p));
-			$form->addElement(form_makeTextField('fullname', $_REQUEST['fullname'], $lang['fullname'], '', $c, $p));
+			$form->addElement(form_makeTextField('nickname', $openid_data['nickname'], $lang['user'], null, $c , $pnickname));
+			$form->addElement(form_makeTextField('email', $openid_data['email'], $lang['email'], '', $c, $p));
+			$form->addElement(form_makeTextField('fullname', $openid_data['fullname'], $lang['fullname'], '', $c, $p));
 			$form->addElement(form_makeButton('submit', '', $this->getLang('complete_button')));
 		} else {
 			$form->startFieldset($this->getLang('openid_login_fieldset'));
@@ -458,10 +469,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$sregs = array('email', 'nickname', 'fullname');
 		foreach ($sregs as $sreg) {
 			if (!empty($_GET["openid_sreg_$sreg"])) {
-				$redirect_url .= "&$sreg=" . urlencode($_GET["openid_sreg_$sreg"]);
+				$_SESSION[DOKU_COOKIE]["auth"]["info"]["openid"][$sreg] = $_GET["openid_sreg_$sreg"];
 			}
 		}
-
 		// we will advice the user to register a real user account
 		$this->_redirect($redirect_url);
 	}
@@ -475,31 +485,33 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		global $ID, $lang, $conf, $auth, $openid_associations;
 
 		if(!$auth->canDo('addUser')) return false;
-
-		$_POST['login'] = $_POST['nickname'];
+		
+		if( $this->getConf('register_lock_username') ) {
+			$user = $_SESSION[DOKU_COOKIE]["auth"]["info"]["openid"]["nickname"];
+		} else {
+			$user = $_POST['nickname'];
+		}
 
 		// clean username
-		$_POST['login'] = preg_replace('/.*:/','',$_POST['login']);
-		$_POST['login'] = cleanID($_POST['login']);
+		$user = preg_replace('/.*:/','', $user);
+		$user = cleanID($user);
 		// clean fullname and email
-		$_POST['fullname'] = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['fullname']));
-		$_POST['email']    = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['email']));
-
-		if (empty($_POST['login']) || empty($_POST['fullname']) || empty($_POST['email'])) {
+		$fullname = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['fullname']));
+		$email    = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['email']));
+		if (empty($user) || empty($fullname) || empty($email)) {
 			msg($lang['regmissing'], -1);
 			return false;
-		} else if (!mail_isvalid($_POST['email'])) {
+		} else if (!mail_isvalid($email)) {
 			msg($lang['regbadmail'], -1);
 			return false;
 		}
 
 		// okay try to create the user
-		if (!$auth->createUser($_POST['login'], auth_pwgen(), $_POST['fullname'], $_POST['email'])) {
+		if (!$auth->createUser($user, auth_pwgen(), $fullname, $email)) {
 			msg($lang['reguexists'], -1);
 			return false;
 		}
 
-		$user = $_POST['login'];
 		$openid = $_SERVER['REMOTE_USER'];
 
 		// we update the OpenID associations array
@@ -533,13 +545,11 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$USERINFO['name'] = 'OpenID';
 			$USERINFO['grps'] = array($conf['defaultgroup'], 'openid');
 		}
-
 		$pass = PMA_blowfish_encrypt($USERINFO['pass'], auth_cookiesalt());
 		auth_setCookie($user, $pass, false);
 
 		// auth data has changed, reinit the $INFO array
 		$INFO = pageinfo();
-
 		return true;
 	}
 
@@ -631,11 +641,12 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	/**
 	 * Inspired by: http://subversion.fem.tu-ilmenau.de/websvn/wsvn/dokuwiki/ipgroup/action.php
 	 */ 
-	function assigngroup(&$event, $param)
+	function handle_acl(&$event, $param)
 	{
 		global $USERINFO, $INFO, $ID;
 		$user = $_SERVER['REMOTE_USER'];
 		$providers = $this->user_getproviders($user);
+		
 		foreach ($providers as $provider) {
 			if (!empty($USERINFO)) {
 				$USERINFO['grps'][] = $provider;
@@ -676,5 +687,15 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	function check_identifier($openid_identifier)
 	{
 			return $this->check_provider($openid_identifier);
+	}
+	
+	function handle_userinfo(&$event, $param) {
+		global $INFO, $USERINFO;
+		if( !empty($_SERVER['REMOTE_USER']) && preg_match('!^https?://!', $_SERVER['REMOTE_USER']) ) {
+			$INFO['userinfo']['name']  = $_SESSION[DOKU_COOKIE]['auth']['info']['openid']['fullname'];
+			$INFO['userinfo']['email'] = $_SESSION[DOKU_COOKIE]['auth']['info']['openid']['email'];
+			$INFO['client'] = $_SESSION[DOKU_COOKIE]['auth']['info']['nickname'];
+			$USERINFO = $INFO['userinfo'];
+		}
 	}
 }
