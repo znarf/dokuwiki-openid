@@ -79,7 +79,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			'handle_act_unknown',
 			array());
 		$controller->register_hook('ACTION_ACT_PREPROCESS',
-			'AFTER',
+			'BEFORE',
 			$this,
 			'assigngroup');
 	}
@@ -642,14 +642,18 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			}
 			$INFO['userinfo']['grps'][] = $provider;
 			$INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
-			$INFO['writable'] = false;
-			if ($INFO['perm'] >= AUTH_EDIT) {
-				if (file_exists($INFO['filepath'])) {
-					$INFO['writable'] = is_writable($INFO['filepath']);
-				} else {
-					$INFO['writable'] = is_writable(dirname($INFO['filepath']));
-				}
+			
+			# Copied from inc/common.php:153-159
+			# Even though act_permcheck can properly check permissions
+			#  after $INFO['perm'] is set, the writable and editable variables
+			#  are set before this plugin is activated, so they must be rewritten.
+			if($INFO['exists']) {
+				$INFO['writable'] = (is_writable($INFO['filepath']) &&
+					($INFO['perm'] >= AUTH_EDIT));
+			} else {
+				$INFO['writable'] = ($INFO['perm'] >= AUTH_CREATE);
 			}
+			$INFO['editable'] = ($INFO['writable'] && empty($INFO['locked']));
 		}
 	}
 
