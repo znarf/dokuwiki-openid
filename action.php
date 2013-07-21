@@ -248,7 +248,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$user = $_SERVER['REMOTE_USER'];
 
 		if (empty($user)) {
-			print $this->plugin_locale_xhtml('intro');
+			print $this->locale_xhtml('intro');
 			print '<div class="centeralign">'.NL;
 			$form = $this->get_openid_form('login');
 			html_form('register', $form);
