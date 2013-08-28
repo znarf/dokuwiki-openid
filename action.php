@@ -58,6 +58,10 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function register(&$controller)
 	{
+		$controller->register_hook('ACTION_ACT_PREPROCESS',
+			'BEFORE',
+			$this,
+			'handle_userinfo');
 		$controller->register_hook('HTML_LOGINFORM_OUTPUT',
 			'BEFORE',
 			$this,
@@ -78,6 +82,14 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$this,
 			'handle_act_unknown',
 			array());
+		$controller->register_hook('ACTION_ACT_PREPROCESS',
+			'BEFORE',
+			$this,
+			'handle_acl');
+		$controller->register_hook('MEDIAMANAGER_STARTED',
+			'BEFORE',
+			$this,
+			'handle_acl');
 	}
 
 	/**
@@ -100,7 +112,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 
 	/**
 	 * Return an OpenID Consumer
-	 */    
+	 */
 	function getConsumer()
 	{
 		global $conf;
@@ -125,10 +137,10 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function handle_act_preprocess(&$event, $param)
 	{
-		global $ID, $conf, $auth;
+		global $ID, $conf, $auth, $INFO;
 
 		$user = $_SERVER['REMOTE_USER'];
-        
+		
 		// Do not ask the user a password he didn't set
 		if ($event->data == 'profile') {
 			$conf['profileconfirm'] = 0;
@@ -141,7 +153,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			// Warn the user to register an account if he's using a not registered OpenID
 			// and if registration is possible
 			if (preg_match('!^https?://!', $user)) {
-				if ($auth && $auth->canDo('addUser') && actionOK('register')) {
+				$registerOK = ( actionOK('register') || $this->getConf('register_allow') );
+				if ($auth && $auth->canDo('addUser') && $registerOK) {
 					$message = sprintf($this->getLang('complete_registration_notice'), $this->_self('openid'));
 					msg($message, 2);
 				}
@@ -153,14 +166,37 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			// not sure this if it's useful there
 			$event->stopPropagation();
 			$event->preventDefault();
+			$conf_allowedproviders = $this->getConf('allowedproviders');
 
 			if (isset($_POST['mode']) && ($_POST['mode'] == 'login' || $_POST['mode'] == 'add')) {
 
+				// See if submitted provider is allowed or not
+				if (empty($conf_allowedproviders)) {
+					// Allow any provider
+					// User needs to fill in full identifier URL.
+					$openid_identifier = $_POST['openid_identifier'];
+				} else {
+					// Get it from the selected option
+					$openid_provider = $_POST['openid_provider'];
+
+					// Create identifier for user. Replace '*' by username.
+					$openid_identifier = $openid_provider;
+					$openid_identifier = str_replace('*', $_POST['nickname'], $openid_identifier);
+					
+					$validprovider   = $this->check_provider($openid_provider);
+					$valididentifier = $this->check_identifier($openid_identifier);
+
+					if( !$validprovider or !$valididentifier ) {
+						msg($this->getLang('enter_valid_openid_error'), -1);
+						return;
+					}
+				}
+
 				// we try to login with the OpenID submited
 				$consumer = $this->getConsumer();
-				$auth = $consumer->begin($_POST['openid_identifier']);
+				$auth = $consumer->begin($openid_identifier);
 				if (!$auth) {
-					msg($this->getLang('enter_valid_openid_error'), -1);
+					msg($this->getLang('enter_valid_openid_error') . ':'.$openid_identifier, -1);
 					return;
 				}
 
@@ -177,10 +213,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				// this fix an issue with mod_rewrite with JainRain library
 				// when a parameter seems to be non existing in the query
 				$return_to = $this->_self('openid') . '&id=' . $ID;
-
+				
 				$url = $auth->redirectURL(DOKU_URL, $return_to);
 				$this->_redirect($url);
-
 			} else if (isset($_POST['mode']) && $_POST['mode'] == 'extra') {
 				// we register the user on the wiki and associate the account with his OpenID
 				$this->register_user();
@@ -195,6 +230,14 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				$response = $consumer->complete($this->_self('openid'));
 				// set session variable depending on authentication result
 				if ($response->status == Auth_OpenID_SUCCESS) {
+					$openid_identifier = $_GET['openid_identity'];
+					
+					$isallowed = $this->check_identifier($openid_identifier);
+
+					if (!$isallowed) {
+						msg($this->getlang('enter_valid_openid_error'), -1);
+						return;
+					}
 
 					$openid = isset($_GET['openid1_claimed_id']) ? $_GET['openid1_claimed_id'] : $_GET['openid_claimed_id'];
 					if (empty($openid)) {
@@ -214,9 +257,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 							$this->_redirect(wl($ID));
 						}
 					}
-
 				} else {
-					msg($this->getLang('openid_authentication_failed') . ': ' . $response->message, -1);
+					msg($this->getLang('openid_authentication_failed'), -1);
 					return;
 				}
 
@@ -225,9 +267,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				msg($this->getLang('openid_authentication_canceled'), 0);
 				return; // fall through to what ever action was called
 			}
-
 		}
-        
+		
 		return; // fall through to what ever action was called
 	}
 
@@ -236,7 +277,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function handle_act_unknown(&$event, $param)
 	{
-		global $auth, $ID;
+		global $auth, $ID, $conf;
 
 		if ($event->data != 'openid') {
 			return;
@@ -254,8 +295,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			html_form('register', $form);
 			print '</div>'.NL;
 		} else if (preg_match('!^https?://!', $user)) {
+			$registerOK = ( actionOK('register') || $this->getConf('register_allow') );
 			echo '<h1>', $this->getLang('openid_account_fieldset'), '</h1>', NL;
-			if ($auth && $auth->canDo('addUser') && actionOK('register')) {
+			if ($auth && $auth->canDo('addUser') && $registerOK) {
 				echo '<p>', $this->getLang('openid_complete_text'), '</p>', NL;
 				print '<div class="centeralign">'.NL;
 				$form = $this->get_openid_form('extra');
@@ -263,13 +305,14 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				print '</div>'.NL;
 			} else {
 				echo '<p>', sprintf($this->getLang('openid_complete_disabled_text'), wl($ID)), '</p>', NL;
+				echo '<meta http-equiv="refresh" content="3;URL=\''. wl($ID) . '\'">';
 			}
 		} else {
 			echo '<h1>', $this->getLang('openid_identities_title'), '</h1>', NL;
 			$identities = $this->get_associations($_SERVER['REMOTE_USER']);
 			if (!empty($identities)) {
 				echo '<form action="' . $this->_self('openid') . '" method="post"><div class="no">';
-				echo '<table>';
+				echo '<table>';echo '<h1>', $this->getLang('openid_account_fieldset'), '</h1>', NL;
 				foreach ($identities as $identity => $user) {
 					echo '<tr>';
 					echo '<td width="10"><input type="checkbox" name="delete[' . htmlspecialchars($identity) . ']"/></td>';
@@ -302,45 +345,89 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 
 	/**
 	 * Generate the OpenID login/complete forms
-	 */    
+	 */
 	function get_openid_form($mode)
 	{
-		global $USERINFO, $lang;
-
+		global $USERINFO, $lang, $conf;
+		
 		$c = 'block';
 		$p = array('size'=>'50');
+
+
+		$conf_allowedproviders = $this->getConf('allowedproviders');
+		if( empty($conf_allowedproviders) ) {
+			$providers = null;
+		} else {
+			$providers = array();
+			foreach( explode(' ', $conf_allowedproviders) as $provider) {
+				$provider_label = parse_url($provider, PHP_URL_HOST);
+				$providers[$provider] = $provider_label;
+			}
+		}
 
 		$form = new Doku_Form('openid__login', script());
 		$form->addHidden('id', $_GET['id']);
 		$form->addHidden('do', 'openid');
 		if ($mode == 'extra') {
+		
+			$lockusername = $this->getConf('register_lock_username');
+			$pnickname = $p;
+			if( $lockusername ) {
+				$pnickname['disabled'] = 'disabled';
+			}
+			$openid_data = $_SESSION[DOKU_COOKIE]["auth"]["info"]["openid"];
 			$form->startFieldset($this->getLang('openid_account_fieldset'));
 			$form->addHidden('mode', 'extra');
-			$form->addElement(form_makeTextField('nickname', $_REQUEST['nickname'], $lang['user'], null, $c, $p));
-			$form->addElement(form_makeTextField('email', $_REQUEST['email'], $lang['email'], '', $c, $p));
-			$form->addElement(form_makeTextField('fullname', $_REQUEST['fullname'], $lang['fullname'], '', $c, $p));
+			$form->addElement(form_makeTextField('nickname', $openid_data['nickname'], $lang['user'], null, $c , $pnickname));
+			$form->addElement(form_makeTextField('email', $openid_data['email'], $lang['email'], '', $c, $p));
+			$form->addElement(form_makeTextField('fullname', $openid_data['fullname'], $lang['fullname'], '', $c, $p));
 			$form->addElement(form_makeButton('submit', '', $this->getLang('complete_button')));
 		} else {
 			$form->startFieldset($this->getLang('openid_login_fieldset'));
 			$form->addHidden('mode', 'login');
-			$form->addElement(form_makeTextField('openid_identifier', $_REQUEST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
+
+			if ( !is_array($providers) ) {
+				$form->addElement(form_makeTextField('openid_identifier', $_REQUEST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
+			} else {
+				$params = array();
+				$form->addElement(
+					form_makeListboxField(
+						'openid_provider',
+						$providers,
+						$_REQUEST['openid_provider'], #default
+						$this->getLang('openid_provider_label'),
+						'',
+						'block',
+						$params
+					)
+				);
+				$form->addElement(form_makeTextField('nickname', $_REQUEST['nickname'], $lang['user'], null, $c, $p));
+			}
 			$form->addElement(form_makeButton('submit', '', $lang['btn_login']));
 		}
 		$form->endFieldset();
 		return $form;
 	}
-    
+	
 	/**
 	 * Insert link to OpenID into usual login form
 	 */
 	function handle_login_form(&$event, $param)
 	{
-		$msg = $this->getLang('login_link');
-		$msg = sprintf("<p>$msg</p>", $this->_self('openid'));
-		$pos = $event->data->findElementByAttribute('type', 'submit');
-		$event->data->insertElement($pos+2, $msg);
+		if ($this->getConf('loginopenid') && empty($_GET['disableopenid'])) {
+			$event->data = $this->get_openid_form('login');
+			$pos = $event->data->findElementByAttribute('type', 'submit');
+			$msg = $this->getLang('login_link_normal');
+			$msg = sprintf("<p>$msg</p>", wl($ID, 'do=login&disableopenid=1'));
+			$event->data->insertElement($pos+2, $msg);
+		} else {
+			$msg = $this->getLang('login_link');
+			$msg = sprintf("<p>$msg</p>", $this->_self('openid'));
+			$pos = $event->data->findElementByAttribute('type', 'submit');
+			$event->data->insertElement($pos+2, $msg);
+		}
 	}
-
+	
 	function handle_profile_form(&$event, $param)
 	{
 		echo '<p>', sprintf($this->getLang('manage_link'), $this->_self('openid')), '</p>';
@@ -372,7 +459,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		// this openid is associated with a real wiki user account
 		if (isset($associations[$openid])) {
 			$user = $associations[$openid];
-			return $this->update_session($user);
+			### return #TEMP
+			$this->update_session($user);
 		}
 
 		// no real wiki user account associated
@@ -386,10 +474,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$sregs = array('email', 'nickname', 'fullname');
 		foreach ($sregs as $sreg) {
 			if (!empty($_GET["openid_sreg_$sreg"])) {
-				$redirect_url .= "&$sreg=" . urlencode($_GET["openid_sreg_$sreg"]);
+				$_SESSION[DOKU_COOKIE]["auth"]["info"]["openid"][$sreg] = $_GET["openid_sreg_$sreg"];
 			}
 		}
-
 		// we will advice the user to register a real user account
 		$this->_redirect($redirect_url);
 	}
@@ -403,31 +490,33 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		global $ID, $lang, $conf, $auth, $openid_associations;
 
 		if(!$auth->canDo('addUser')) return false;
-
-		$_POST['login'] = $_POST['nickname'];
+		
+		if( $this->getConf('register_lock_username') ) {
+			$user = $_SESSION[DOKU_COOKIE]["auth"]["info"]["openid"]["nickname"];
+		} else {
+			$user = $_POST['nickname'];
+		}
 
 		// clean username
-		$_POST['login'] = preg_replace('/.*:/','',$_POST['login']);
-		$_POST['login'] = cleanID($_POST['login']);
+		$user = preg_replace('/.*:/','', $user);
+		$user = cleanID($user);
 		// clean fullname and email
-		$_POST['fullname'] = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['fullname']));
-		$_POST['email']    = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['email']));
-
-		if (empty($_POST['login']) || empty($_POST['fullname']) || empty($_POST['email'])) {
+		$fullname = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['fullname']));
+		$email    = trim(preg_replace('/[\x00-\x1f:<>&%,;]+/','',$_POST['email']));
+		if (empty($user) || empty($fullname) || empty($email)) {
 			msg($lang['regmissing'], -1);
 			return false;
-		} else if (!mail_isvalid($_POST['email'])) {
+		} else if (!mail_isvalid($email)) {
 			msg($lang['regbadmail'], -1);
 			return false;
 		}
 
 		// okay try to create the user
-		if (!$auth->createUser($_POST['login'], auth_pwgen(), $_POST['fullname'], $_POST['email'])) {
+		if (!$auth->createUser($user, auth_pwgen(), $fullname, $email)) {
 			msg($lang['reguexists'], -1);
 			return false;
 		}
 
-		$user = $_POST['login'];
 		$openid = $_SERVER['REMOTE_USER'];
 
 		// we update the OpenID associations array
@@ -461,13 +550,11 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$USERINFO['name'] = 'OpenID';
 			$USERINFO['grps'] = array($conf['defaultgroup'], 'openid');
 		}
-
 		$pass = PMA_blowfish_encrypt($USERINFO['pass'], auth_cookiesalt());
 		auth_setCookie($user, $pass, false);
 
 		// auth data has changed, reinit the $INFO array
 		$INFO = pageinfo();
-
 		return true;
 	}
 
@@ -514,7 +601,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			include(DOKU_CONF.'openid.php');
 			$this->openid_associations = $openid_associations;
 		} else {
-			$this->openid_associations = $openid_associations = $openid_associations = array();
+			$this->openid_associations = $openid_associations = array();
 		}
 		// Maybe is there a better way to filter the array
 		if (!empty($username)) {
@@ -528,5 +615,91 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		}
 		return $openid_associations;
 	}
+	
+	function allowedproviders()
+	{
+		$conf_allowedproviders = $this->getConf('allowedproviders');
+		if (empty($conf_allowedproviders) ) {
+			return array();
+		} else {
+			return explode(' ', $conf_allowedproviders);
+		}
+	}
 
+	function user_getproviders($user)
+	{
+		if (empty($user)) {
+			return array();
+		}
+		// See if logged in through openid
+		if ( $this->check_identifier($user) ) {
+			return array(parse_url($user, PHP_URL_HOST));
+		}
+		$associations = $this->get_associations($user);
+		$providers=array();
+		foreach ($associations as $openid_identifier => $username) {
+			$providers[] = parse_url($openid_identifier, PHP_URL_HOST);
+		}
+		return $providers;
+	}
+
+	/**
+	 * Inspired by: http://subversion.fem.tu-ilmenau.de/websvn/wsvn/dokuwiki/ipgroup/action.php
+	 */ 
+	function handle_acl(&$event, $param)
+	{
+		global $USERINFO, $INFO, $ID;
+		$user = $_SERVER['REMOTE_USER'];
+		$providers = $this->user_getproviders($user);
+		
+		foreach ($providers as $provider) {
+			if (!empty($USERINFO)) {
+				$USERINFO['grps'][] = $provider;
+			}
+			$INFO['userinfo']['grps'][] = $provider;
+			$INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
+			# Copied from inc/common.php:153-159
+			# Even though act_permcheck can properly check permissions
+			#  after $INFO['perm'] is set, the writable and editable variables
+			#  are set before this plugin is activated, so they must be rewritten.
+			if($INFO['exists']) {
+				$INFO['writable'] = (is_writable($INFO['filepath']) &&
+					($INFO['perm'] >= AUTH_EDIT));
+			} else {
+				$INFO['writable'] = ($INFO['perm'] >= AUTH_CREATE);
+			}
+			$INFO['editable'] = ($INFO['writable'] && empty($INFO['locked']));
+		}
+	}
+
+	function check_provider($openid_provider)
+	{
+			$conf_allowedproviders = $this->getConf('allowedproviders');
+			if (empty($conf_allowedproviders) ) {
+				return true;
+			}
+			$allowedproviders = explode(' ', $conf_allowedproviders);
+			$host = parse_url($openid_provider, PHP_URL_HOST);
+			foreach ($allowedproviders as $provider) {
+				if (parse_url($provider, PHP_URL_HOST) == $host) {
+					return true;
+				}
+			}
+			return false;
+	}
+	
+	function check_identifier($openid_identifier)
+	{
+			return $this->check_provider($openid_identifier);
+	}
+	
+	function handle_userinfo(&$event, $param) {
+		global $INFO, $USERINFO;
+		if( !empty($_SERVER['REMOTE_USER']) && preg_match('!^https?://!', $_SERVER['REMOTE_USER']) ) {
+			$INFO['userinfo']['name']  = $_SESSION[DOKU_COOKIE]['auth']['info']['openid']['fullname'];
+			$INFO['userinfo']['email'] = $_SESSION[DOKU_COOKIE]['auth']['info']['openid']['email'];
+			$INFO['client'] = $_SESSION[DOKU_COOKIE]['auth']['info']['nickname'];
+			$USERINFO = $INFO['userinfo'];
+		}
+	}
 }
