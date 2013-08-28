@@ -59,9 +59,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	function register(&$controller)
 	{
 		$controller->register_hook('ACTION_ACT_PREPROCESS',
-		'BEFORE',
-		$this,
-		'handle_userinfo');
+			'BEFORE',
+			$this,
+			'handle_userinfo');
 		$controller->register_hook('HTML_LOGINFORM_OUTPUT',
 			'BEFORE',
 			$this,
@@ -86,7 +86,10 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			'BEFORE',
 			$this,
 			'handle_acl');
-
+		$controller->register_hook('MEDIAMANAGER_STARTED',
+			'BEFORE',
+			$this,
+			'handle_acl');
 	}
 
 	/**
@@ -134,7 +137,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function handle_act_preprocess(&$event, $param)
 	{
-		global $ID, $conf, $auth;
+		global $ID, $conf, $auth, $INFO;
 
 		$user = $_SERVER['REMOTE_USER'];
 		
@@ -292,8 +295,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			html_form('register', $form);
 			print '</div>'.NL;
 		} else if (preg_match('!^https?://!', $user)) {
-			echo '<h1>', $this->getLang('openid_account_fieldset'), '</h1>', NL;
 			$registerOK = ( actionOK('register') || $this->getConf('register_allow') );
+			echo '<h1>', $this->getLang('openid_account_fieldset'), '</h1>', NL;
 			if ($auth && $auth->canDo('addUser') && $registerOK) {
 				echo '<p>', $this->getLang('openid_complete_text'), '</p>', NL;
 				print '<div class="centeralign">'.NL;
@@ -302,13 +305,14 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 				print '</div>'.NL;
 			} else {
 				echo '<p>', sprintf($this->getLang('openid_complete_disabled_text'), wl($ID)), '</p>', NL;
+				echo '<meta http-equiv="refresh" content="3;URL=\''. wl($ID) . '\'">';
 			}
 		} else {
 			echo '<h1>', $this->getLang('openid_identities_title'), '</h1>', NL;
 			$identities = $this->get_associations($_SERVER['REMOTE_USER']);
 			if (!empty($identities)) {
 				echo '<form action="' . $this->_self('openid') . '" method="post"><div class="no">';
-				echo '<table>';
+				echo '<table>';echo '<h1>', $this->getLang('openid_account_fieldset'), '</h1>', NL;
 				foreach ($identities as $identity => $user) {
 					echo '<tr>';
 					echo '<td width="10"><input type="checkbox" name="delete[' . htmlspecialchars($identity) . ']"/></td>';
@@ -455,7 +459,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		// this openid is associated with a real wiki user account
 		if (isset($associations[$openid])) {
 			$user = $associations[$openid];
-			return $this->update_session($user);
+			### return #TEMP
+			$this->update_session($user);
 		}
 
 		// no real wiki user account associated
@@ -648,12 +653,13 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$providers = $this->user_getproviders($user);
 		
 		foreach ($providers as $provider) {
+			#die(json_encode($USERINFO));
 			if (!empty($USERINFO)) {
 				$USERINFO['grps'][] = $provider;
 			}
 			$INFO['userinfo']['grps'][] = $provider;
 			$INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
-			
+		#	die(json_encode($INFO['perm']));	
 			# Copied from inc/common.php:153-159
 			# Even though act_permcheck can properly check permissions
 			#  after $INFO['perm'] is set, the writable and editable variables

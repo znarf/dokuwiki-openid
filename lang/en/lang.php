@@ -27,5 +27,5 @@ $lang['openid_authentication_failed']   = 'OpenID authentication failed';
 $lang['openid_authentication_canceled'] = 'OpenID authentication canceled.';
 
 $lang['openid_complete_text'] = 'Please now verify or complete your account informations to finish registration.';
-$lang['openid_complete_disabled_text'] = 'You\'re correctly authenticated but registration is not possible on this wiki. <a href="%s">Continue there.</a>';
+$lang['openid_complete_disabled_text'] = 'You\'re now logged in. You will be redirected to <a href="%s">this page.</a>';
 $lang['none'] = 'None.';
