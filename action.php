@@ -653,13 +653,11 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$providers = $this->user_getproviders($user);
 		
 		foreach ($providers as $provider) {
-			#die(json_encode($USERINFO));
 			if (!empty($USERINFO)) {
 				$USERINFO['grps'][] = $provider;
 			}
 			$INFO['userinfo']['grps'][] = $provider;
 			$INFO['perm']     = auth_aclcheck($ID, '', $INFO['userinfo']['grps']);
-		#	die(json_encode($INFO['perm']));	
 			# Copied from inc/common.php:153-159
 			# Even though act_permcheck can properly check permissions
 			#  after $INFO['perm'] is set, the writable and editable variables
