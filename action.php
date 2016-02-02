@@ -56,7 +56,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	/**
 	 * Register the eventhandlers
 	 */
-	function register(&$controller)
+	function register(Doku_Event_Handler $controller)
 	{
 		$controller->register_hook('HTML_LOGINFORM_OUTPUT',
 			'BEFORE',
